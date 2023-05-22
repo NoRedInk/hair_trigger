@@ -33,10 +33,9 @@ module HairTrigger
           end
         when :mysql
           select_rows("SHOW TRIGGERS").each do |(name, event, table, actions, timing, created, sql_mode, definer)|
-            definer = normalize_mysql_definer(definer)
             next if options[:only] && !options[:only].include?(name)
             triggers[name.strip] = <<-SQL
-CREATE #{definer != implicit_mysql_definer ? "DEFINER = #{definer} " : ""}TRIGGER #{name} #{timing} #{event} ON `#{table}`
+CREATE TRIGGER #{name} #{timing} #{event} ON `#{table}`
 FOR EACH ROW
 #{actions}
             SQL
