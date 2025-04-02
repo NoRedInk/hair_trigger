@@ -27,11 +27,11 @@ module HairTrigger
       name_clause = options[:only] ? "IN ('" + options[:only].join("', '") + "')" : nil
       adapter_name = HairTrigger.adapter_name_for(self)
       case adapter_name
-        when :sqlite
+        when *HairTrigger.hair_trigger_config.sqlite_adapters
           select_rows("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' #{name_clause ? " AND name " + name_clause : ""}").each do |(name, definition)|
             triggers[name] = quote_table_name_in_trigger(definition) + ";\n"
           end
-        when :mysql
+        when *HairTrigger.hair_trigger_config.mysql_adapters
           select_rows("SHOW TRIGGERS").each do |(name, event, table, actions, timing, created, sql_mode, definer)|
             next if options[:only] && !options[:only].include?(name)
             triggers[name.strip] = <<-SQL
@@ -40,14 +40,14 @@ FOR EACH ROW
 #{actions}
             SQL
           end
-        when :postgresql, :postgis
+        when *HairTrigger.hair_trigger_config.postgresql_adapters
           function_conditions = "(SELECT typname FROM pg_type WHERE oid = prorettype) = 'trigger'"
           function_conditions << <<-SQL unless options[:simple_check]
             AND oid IN (
               SELECT tgfoid
               FROM pg_trigger
               WHERE NOT tgisinternal AND tgconstrrelid = 0 AND tgrelid IN (
-                SELECT oid FROM pg_class WHERE relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+                SELECT oid FROM pg_class WHERE relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = '#{HairTrigger.pg_schema}')
               )
             )
           SQL
@@ -56,9 +56,9 @@ FOR EACH ROW
             SELECT tgname::varchar, pg_get_triggerdef(oid, true)
             FROM pg_trigger
             WHERE NOT tgisinternal AND tgconstrrelid = 0 AND tgrelid IN (
-              SELECT oid FROM pg_class WHERE relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+              SELECT oid FROM pg_class WHERE relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = '#{HairTrigger.pg_schema}')
             )
-            
+
             #{name_clause ? " AND tgname::varchar " + name_clause : ""}
             UNION
             SELECT proname || '()', pg_get_functiondef(oid)

@@ -34,25 +34,21 @@ jobs:
           --health-retries 3
     strategy:
       matrix:
-        ruby: ["2.5", "2.7", "3.0", "3.1"]
-        gemfile: ["activerecord_6.0", "activerecord_6.1", "activerecord_7.0"]
-        exclude:
-          - { ruby: "2.5", gemfile: "activerecord_7.0" }
-          - { ruby: "3.1", gemfile: "activerecord_6.0" }
+        ruby: ["3.2", "3.3"]
+        gemfile: ["activerecord_6.1", "activerecord_7.0", "activerecord_7.1", "activerecord_7.2", "activerecord_8.0"]
     env:
       BUNDLE_GEMFILE: gemfiles/${{ matrix.gemfile }}.gemfile
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+      - run: sudo apt-get -yqq install libpq-dev libmysqlclient-dev
       - env:
           DB_CONFIG: github-actions
           PGPORT: ${{ job.services.postgres.ports[5432] }}
           MYSQLPORT: ${{ job.services.mysql.ports[3306] }}
-        run: |
-          sudo apt-get -yqq install libpq-dev libmysqlclient-dev
-          bundle exec rspec
+        run: bundle exec rspec

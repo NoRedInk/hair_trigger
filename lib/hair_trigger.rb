@@ -8,12 +8,28 @@ require 'hair_trigger/schema_dumper'
 require 'hair_trigger/railtie' if defined?(Rails::Railtie)
 
 module HairTrigger
+  POSTGRESQL_ADAPTERS = %i[postgresql postgis]
+  MYSQL_ADAPTERS = %i[mysql mysql2rgeo trilogy]
+  SQLITE_ADAPTERS = %i[sqlite litedb]
 
+  autoload :Configuration, 'hair_trigger/configuration'
   autoload :Builder, 'hair_trigger/builder'
   autoload :MigrationReader, 'hair_trigger/migration_reader'
 
   class << self
-    attr_writer :model_path, :schema_rb_path, :migration_path
+    attr_writer :model_path, :schema_rb_path, :migration_path, :pg_schema
+
+    def configure
+      yield hair_trigger_config
+    end
+
+    def hair_trigger_config
+      @hair_trigger_config ||= Configuration.new(
+        postgresql_adapters: POSTGRESQL_ADAPTERS,
+        mysql_adapters:      MYSQL_ADAPTERS,
+        sqlite_adapters:     SQLITE_ADAPTERS
+      )
+    end
 
     def current_triggers
       # see what the models say there should be
@@ -39,7 +55,12 @@ module HairTrigger
     end
 
     def migrator
-      if ActiveRecord::VERSION::STRING >= "7.1."
+      if Gem::Version.new("7.2.0") <= ActiveRecord.gem_version
+        connection = ActiveRecord::Tasks::DatabaseTasks.migration_connection_pool
+        schema_migration = connection.schema_migration
+        migrations = ActiveRecord::MigrationContext.new(migration_path, schema_migration).migrations
+        ActiveRecord::Migrator.new(:up, migrations, schema_migration, ActiveRecord::InternalMetadata.new(connection))
+      elsif Gem::Version.new("7.1.0") <= ActiveRecord.gem_version
         connection = ActiveRecord::Tasks::DatabaseTasks.migration_connection
         schema_migration = connection.schema_migration
         migrations = ActiveRecord::MigrationContext.new(migration_path, schema_migration).migrations
@@ -221,6 +242,10 @@ end
 
     def migration_path
       @migration_path ||= 'db/migrate'
+    end
+
+    def pg_schema
+      @pg_schema ||= 'public'
     end
 
     def adapter_name_for(adapter)

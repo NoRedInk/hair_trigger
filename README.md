@@ -125,6 +125,21 @@ trigger.after(:insert).declare("user_type text; status text") do
 end
 ```
 
+#### new_as(name) or old_as(name)
+PostgreSQL-specific option for "after" triggers to allow accessing the row as it was before the operation (`old`) or as it is after the operation (`new`). This is useful in statement trigger when you want to compare the old and new values of all rows changed during an update trigger. For example:
+
+```ruby
+trigger.after(:update).for_each(:statement).new_as(:new_users).old_as(:old_users) do
+  <<-SQL
+    INSERT INTO user_changes(id, old_name, new_name) FROM (
+        SELECT new_users.id, old_users.name AS old_name, new_users.name AS new_name
+        FROM new_users
+        INNER JOIN old_users ON new_users.id = old_users.id
+      ) agg
+  SQL
+end
+```
+
 #### all
 Noop, useful for trigger groups (see below).
 
@@ -201,6 +216,15 @@ Because `create_trigger` may drop an existing trigger of the same name,
 you need to actually implement `up`/`down` methods in your migration
 (rather than `change`) so that it does the right thing when
 rolling back.
+
+The `drop_trigger` currently only supports the `drop_trigger(name, table, options = {})`
+format. You will need to determine what the resulting trigger name is (e.g. `SHOW TRIGGERS`
+query) and use that name in the `drop_triggers` call. Your `down` migration method
+might contain something like:
+
+```ruby
+drop_trigger(:users_after_insert_row_tr, :transactions)
+```
 
 #### Manual triggers and :compatibility
 
@@ -314,6 +338,13 @@ ignore. Note that this behavior [may change](https://github.com/jenseng/hair_tri
 in a future release, meaning you'll first need to explicitly drop the
 existing trigger if you wish to redefine it.
 
+## Custom adapters
+
+Out of the box, HairTrigger supports the standard adapters for PostgreSQL, MySQL, and SQLite, plus several common variations (`postgis`, `mysql2rgeo`, `trilogy`, and `litedb`). If you would like to use HairTrigger with another compatible variation, you can dynamically add it to `HairTrigger.hair_trigger_configuration`, for example:
+```ruby
+HairTrigger.hair_trigger_configuration.postgresql_adapters << :postgresql_proxy
+```
+
 ## Gotchas
 
 * As is the case with `ActiveRecord::Base.update_all` or any direct SQL you do,
@@ -353,8 +384,8 @@ to manage all that w/ automagical gemfiles. So the tl;dr when testing locally is
 
 ## Compatibility
 
-* Ruby 2.3.0+
-* Rails 5.0+
+* Ruby 3.0+
+* Rails 6.1+
 * PostgreSQL 8.0+
 * MySQL 5.0.10+
 * SQLite 3.3.8+
@@ -363,4 +394,4 @@ to manage all that w/ automagical gemfiles. So the tl;dr when testing locally is
 
 ## Copyright
 
-Copyright (c) 2011-2022 Jon Jensen. See LICENSE.txt for further details.
+Copyright (c) 2011-2024 Jon Jensen. See LICENSE.txt for further details.
